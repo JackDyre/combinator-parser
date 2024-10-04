@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub struct CombinatorExpression {
     pub exp: Vec<Combinator>,
 }
@@ -51,9 +51,80 @@ impl CombinatorExpression {
             } => e.contains(var),
         })
     }
+
+    pub fn abstraction_elimination(mut self) -> Self {
+        for elem in self.exp.iter_mut() {
+            *elem = match elem {
+                Combinator::Single(_) => continue,
+                Combinator::Expression(e) => {
+                    Combinator::Expression(e.clone().abstraction_elimination())
+                }
+                Combinator::Abstraction {
+                    exp: e,
+                    variable: v,
+                } => match e.exp.as_slice() {
+                    [f] => match f {
+                        Combinator::Single(fucking_variable_name) => {
+                            if fucking_variable_name == v {
+                                Combinator::Single("I".to_string())
+                            } else {
+                                // K f maybe
+                                Combinator::Expression(
+                                    CombinatorExpression {
+                                        exp: vec![Combinator::Single("K".to_string()), f.clone()]
+                                    }
+                                )
+                            }
+                        }
+                        Combinator::Expression(other_fucking_variable_name) => {
+                            if other_fucking_variable_name.contains(&v.clone()) {
+                                // i dont fucking know at this point
+                                // i guess just call abstraction elimination on it and hope for the
+                                // best
+                                todo!()
+                            } else {
+                                // K f maybe bro what the fuck is this code, at least it compiles
+                                // so far
+                                todo!()
+                            }
+                        }
+                        Combinator::Abstraction {
+                            exp: _,
+                            variable: _,
+                        } => panic!(),
+                    },
+                    [f @ .., g] => {
+                        if f.iter().any(|q| q.contains(v.clone())) && g.contains(v.clone()) {
+                            // S [f] [g]
+                            todo!();
+                        } else if !f.iter().any(|q| q.contains(v.clone())) && g.contains(v.clone())
+                        {
+                            if let Combinator::Single(what_the_fuck) = g {
+                                // [gx]=g
+                                todo!()
+                            } else {
+                                // B f [g]
+                                todo!()
+                            }
+                        } else if f.iter().any(|q| q.contains(v.clone())) && !g.contains(v.clone())
+                        {
+                            // C [f] g
+                            todo!()
+                        } else {
+                            // K [fg]
+                            todo!()
+                        }
+                    }
+                    _ => continue,
+                },
+            }
+        }
+
+        self
+    }
 }
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum Combinator {
     Single(String),
     Expression(CombinatorExpression),
@@ -62,6 +133,21 @@ pub enum Combinator {
         variable: String,
     },
 }
+
+impl Combinator {
+    pub fn contains(&self, var: String) -> bool {
+        match self {
+            Self::Single(e) => *e == var,
+            Self::Expression(e) => e.contains(&var),
+            Self::Abstraction {
+                exp: e,
+                variable: _,
+            } => e.contains(&var),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct CombinatorDefinition {
     pub def: CombinatorExpression,
     pub args: Vec<String>,
@@ -93,15 +179,7 @@ impl CombinatorDefinition {
         }]
         .into();
 
-        while self.def.exp.iter().any(|a| match a {
-            Combinator::Abstraction {
-                exp: _,
-                variable: _,
-            } => true,
-            _ => false,
-        }) {
-            break;
-        }
+        let name = self.clone().def.abstraction_elimination();
 
         self
     }
