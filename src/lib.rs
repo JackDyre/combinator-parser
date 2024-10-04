@@ -69,23 +69,26 @@ impl CombinatorExpression {
                                 Combinator::Single("I".to_string())
                             } else {
                                 // K f maybe
-                                Combinator::Expression(
-                                    CombinatorExpression {
-                                        exp: vec![Combinator::Single("K".to_string()), f.clone()]
-                                    }
-                                )
+                                Combinator::Expression(CombinatorExpression {
+                                    exp: vec![Combinator::Single("K".to_string()), f.clone()],
+                                })
                             }
                         }
                         Combinator::Expression(other_fucking_variable_name) => {
                             if other_fucking_variable_name.contains(&v.clone()) {
-                                // i dont fucking know at this point
-                                // i guess just call abstraction elimination on it and hope for the
-                                // best
-                                todo!()
+                                Combinator::Abstraction {
+                                    exp: other_fucking_variable_name
+                                        .clone()
+                                        .abstraction_elimination(),
+                                    variable: v.clone(),
+                                }
                             } else {
-                                // K f maybe bro what the fuck is this code, at least it compiles
-                                // so far
-                                todo!()
+                                Combinator::Expression(CombinatorExpression {
+                                    exp: vec![
+                                        Combinator::Single("K".to_string()),
+                                        Combinator::Expression(other_fucking_variable_name.clone()),
+                                    ],
+                                })
                             }
                         }
                         Combinator::Abstraction {
@@ -95,16 +98,36 @@ impl CombinatorExpression {
                     },
                     [f @ .., g] => {
                         if f.iter().any(|q| q.contains(v.clone())) && g.contains(v.clone()) {
-                            // S [f] [g]
-                            todo!();
+                            Combinator::Expression(CombinatorExpression {
+                                exp : vec![
+                                    Combinator::Single("S".to_string()),
+                                    Combinator::Abstraction { exp: CombinatorExpression {
+                                        exp: f.to_vec()
+                                    }, variable: v.clone() },
+                                    Combinator::Abstraction { exp: CombinatorExpression {
+                                        exp: vec![g.clone()]
+                                    }, variable: v.clone() }
+                                ]
+                            })
                         } else if !f.iter().any(|q| q.contains(v.clone())) && g.contains(v.clone())
                         {
                             if let Combinator::Single(what_the_fuck) = g {
                                 // [gx]=g
+                                println!("does this run");
                                 todo!()
                             } else {
                                 // B f [g]
-                                todo!()
+                                Combinator::Expression(CombinatorExpression {
+                                    exp : vec![
+                                        Combinator::Single("B".to_string()),
+                                        Combinator::Expression(CombinatorExpression {
+                                            exp: f.to_vec()
+                                        }),
+                                        Combinator::Abstraction { exp: CombinatorExpression {
+                                            exp: vec![g.clone()]
+                                        }, variable: v.clone() }
+                                    ]
+                                })
                             }
                         } else if f.iter().any(|q| q.contains(v.clone())) && !g.contains(v.clone())
                         {
@@ -179,7 +202,11 @@ impl CombinatorDefinition {
         }]
         .into();
 
-        let name = self.clone().def.abstraction_elimination();
+        self.def = self
+            .clone()
+            .def
+            .abstraction_elimination()
+            .abstraction_elimination();
 
         self
     }
