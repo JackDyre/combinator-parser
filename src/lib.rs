@@ -1,4 +1,4 @@
-pub mod parse;
+mod parse;
 
 use anyhow::Result;
 use nom::combinator::all_consuming;
