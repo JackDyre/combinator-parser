@@ -1,21 +1,15 @@
-use anyhow::Result;
-use nom::{
-    branch::alt,
-    character::complete::{alphanumeric1, char, satisfy},
-    combinator::{all_consuming, map, recognize},
-    multi::{many0, many1},
-    sequence::{delimited, terminated, tuple},
-    IResult,
-};
+pub mod parse;
 
-#[derive(Debug, Clone)]
-pub enum Element {
-    Item(String),
-    SubExpression(Vec<Element>),
+use anyhow::Result;
+use nom::combinator::all_consuming;
+use parse::{declaration, expression};
+
+pub trait VariableContainer {
+    fn contains(&self, variable: &Element) -> bool;
+    fn contains_abstraction(&self) -> bool;
 }
 
-#[derive(Debug, Clone)]
-
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub struct Combinator {
     pub name: String,
     pub args: Vec<String>,
@@ -35,39 +29,50 @@ impl Combinator {
     }
 }
 
-#[derive(Debug, Clone)]
+impl VariableContainer for Combinator {
+    fn contains(&self, variable: &Element) -> bool {
+        self.expression.contains(variable)
+    }
+
+    fn contains_abstraction(&self) -> bool {
+        self.expression.contains_abstraction()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub struct Expression(Vec<Element>);
 
-pub fn expression(s: &str) -> IResult<&str, Vec<Element>> {
-    many1(element)(s)
+impl VariableContainer for Expression {
+    fn contains(&self, variable: &Element) -> bool {
+        self.0.iter().any(|e| e.contains(variable))
+    }
+
+    fn contains_abstraction(&self) -> bool {
+        self.0.iter().any(|e| e.contains_abstraction())
+    }
 }
 
-fn element(s: &str) -> IResult<&str, Element> {
-    alt((exp_item, subexpression))(s)
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
+pub enum Element {
+    Item(String),
+    SubExpression(Vec<Element>),
+    Abstraction(Vec<Element>, String),
 }
 
-fn exp_item(s: &str) -> IResult<&str, Element> {
-    map(item, |i| Element::Item(i.to_string()))(s)
-}
+impl VariableContainer for Element {
+    fn contains(&self, variable: &Element) -> bool {
+        match self {
+            Element::Item(i) => Element::Item(i.to_string()) == *variable,
+            Element::SubExpression(s) => s.iter().any(|e| e.contains(variable)),
+            Element::Abstraction(s, _) => s.iter().any(|e| e.contains(variable)),
+        }
+    }
 
-fn subexpression(s: &str) -> IResult<&str, Element> {
-    map(delimited(char('('), expression, char(')')), |e| {
-        Element::SubExpression(e)
-    })(s)
-}
-
-pub fn declaration(s: &str) -> IResult<&str, (&str, Vec<&str>)> {
-    terminated(tuple((item, many0(item))), char('='))(s)
-}
-
-fn item(s: &str) -> IResult<&str, &str> {
-    alt((alphanumeric_char, curly_brace_delimited))(s)
-}
-
-fn alphanumeric_char(s: &str) -> IResult<&str, &str> {
-    recognize(satisfy(|c| c.is_alphanumeric()))(s)
-}
-
-fn curly_brace_delimited(s: &str) -> IResult<&str, &str> {
-    delimited(char('{'), alphanumeric1, char('}'))(s)
+    fn contains_abstraction(&self) -> bool {
+        match self {
+            Element::Item(_) => false,
+            Element::SubExpression(s) => s.iter().any(|e| e.contains_abstraction()),
+            Element::Abstraction(_, _) => true,
+        }
+    }
 }
