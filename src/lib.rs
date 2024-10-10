@@ -55,23 +55,23 @@ impl VariableContainer for Expression {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub enum Element {
     Item(String),
-    SubExpression(Vec<Element>),
-    Abstraction(Vec<Element>, String),
+    SubExpression(Expression),
+    Abstraction(Expression, String),
 }
 
 impl VariableContainer for Element {
     fn contains(&self, variable: &Element) -> bool {
         match self {
             Element::Item(i) => Element::Item(i.to_string()) == *variable,
-            Element::SubExpression(s) => s.iter().any(|e| e.contains(variable)),
-            Element::Abstraction(s, _) => s.iter().any(|e| e.contains(variable)),
+            Element::SubExpression(s) => s.contains(variable),
+            Element::Abstraction(s, _) => s.contains(variable),
         }
     }
 
     fn contains_abstraction(&self) -> bool {
         match self {
             Element::Item(_) => false,
-            Element::SubExpression(s) => s.iter().any(|e| e.contains_abstraction()),
+            Element::SubExpression(s) => s.contains_abstraction(),
             Element::Abstraction(_, _) => true,
         }
     }

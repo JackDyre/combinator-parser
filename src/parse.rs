@@ -1,4 +1,4 @@
-use super::Element;
+use super::{Element, Expression};
 use nom::{
     branch::alt,
     character::complete::{alphanumeric1, char, satisfy},
@@ -22,7 +22,7 @@ fn exp_item(s: &str) -> IResult<&str, Element> {
 
 fn subexpression(s: &str) -> IResult<&str, Element> {
     map(delimited(char('('), expression, char(')')), |e| {
-        Element::SubExpression(e)
+        Element::SubExpression(Expression(e))
     })(s)
 }
 
