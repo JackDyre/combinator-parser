@@ -13,7 +13,7 @@ pub fn expression(s: &str) -> IResult<&str, Vec<Element>> {
 }
 
 fn element(s: &str) -> IResult<&str, Element> {
-    alt((exp_item, subexpression))(s)
+    alt((exp_item, subexpression, abstraction))(s)
 }
 
 fn exp_item(s: &str) -> IResult<&str, Element> {
@@ -24,6 +24,16 @@ fn subexpression(s: &str) -> IResult<&str, Element> {
     map(delimited(char('('), expression, char(')')), |e| {
         Element::SubExpression(Expression(e))
     })(s)
+}
+
+fn abstraction(s: &str) -> IResult<&str, Element> {
+    map(
+        tuple((
+            delimited(char('['), expression, char(']')),
+            nom::sequence::preceded(char('_'), item),
+        )),
+        |(a, v)| Element::Abstraction(Expression(a), v.to_string()),
+    )(s)
 }
 
 pub fn declaration(s: &str) -> IResult<&str, (&str, Vec<&str>)> {
