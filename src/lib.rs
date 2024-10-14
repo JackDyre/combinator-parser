@@ -42,10 +42,14 @@ impl Combinator {
     }
 
     pub fn abstraction_elimination(&mut self) -> &mut Self {
-        self.add_abstraction();
-        while self.contains_abstraction() {
-            self.abstraction_substitution();
-            self.reduce_parens();
+        for _ in 0..self.args.len() {
+            self.add_abstraction();
+            println!("{self}");
+            while self.contains_abstraction() {
+                self.abstraction_substitution();
+                self.reduce_parens();
+                println!("{self}");
+            }
         }
 
         self
