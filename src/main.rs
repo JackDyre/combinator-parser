@@ -1,26 +1,15 @@
-use combinator_parser::CombinatorDefinition;
-use combinator_parser::CombinatorExpression;
+use anyhow::Result;
+use combinator_parser::Combinator;
 
-fn main() {
-    let expression = "f(x)".to_string();
-    let c = CombinatorExpression::parse(expression).unwrap();
-    let c = CombinatorDefinition {
-        name: "Q".to_string(),
-        args: "fgx"
-            .chars()
-            .map(|a| a.to_string())
-            .collect::<Vec<_>>()
-            .into_iter()
-            .map(|d| d.to_string())
-            .collect(),
-        def: c,
-    };
+fn main() -> Result<()> {
+    let input_str = "Qfgx=f(gx)(gx)";
 
-    let mut thingy = c;
+    let mut c = Combinator::parse(input_str)?;
+    println!("{c}");
+    c.abstraction_elimination();
+    c.abstraction_elimination();
+    c.abstraction_elimination();
+    println!("{c}");
 
-    println!("{thingy}");
-    for _ in 1..=thingy.args.len() {
-        thingy = thingy.clone().abstraction_elimination();
-        println!("{thingy}");
-    }
+    Ok(())
 }
