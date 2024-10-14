@@ -205,10 +205,17 @@ impl AbstractionElimination for Element {
                             Self::Abstraction(Expression(vec![g.clone()]), v.clone()),
                         ]))
                     }
-                    (true, false, _) => todo!(),     // [fg]_x = C [f] g
-                    (false, true, true) => todo!(),  // [fx]_x = f
-                    (false, true, false) => todo!(), // [fg]_x = B f [g]
-                    (false, false, _) => todo!(),    // [f]_x = K f
+                    (true, false, _) => todo!(),    // [fg]_x = C [f] g
+                    (false, true, true) => todo!(), // [fx]_x = f
+                    (false, true, false) => {
+                        // [fg]_x = B f [g]
+                        Self::SubExpression(Expression(vec![
+                            Self::Item("B".to_string()),
+                            Self::SubExpression(Expression(f.to_vec())),
+                            Self::Abstraction(Expression(vec![g.clone()]), v.clone()),
+                        ]))
+                    }
+                    (false, false, _) => todo!(), // [f]_x = K f
                 },
                 _ => panic!(),
             },
