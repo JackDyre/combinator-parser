@@ -44,6 +44,7 @@ impl Combinator {
     pub fn abstraction_elimination(&mut self) -> &mut Self {
         self.add_abstraction();
         while self.contains_abstraction() {
+            println!("{self}");
             self.abstraction_substitution();
             self.reduce_parens();
         }
@@ -196,7 +197,14 @@ impl AbstractionElimination for Element {
                     g.contains(&Self::Item(v.to_string())),
                     matches!(g, Self::Item(_)),
                 ) {
-                    (true, true, _) => todo!(),      // [fg]_x = S [f] [g]
+                    (true, true, _) => {
+                        // [fg]_x = S [f] [g]
+                        Self::SubExpression(Expression(vec![
+                            Self::Item("S".to_string()),
+                            Self::Abstraction(Expression(f.to_vec()), v.clone()),
+                            Self::Abstraction(Expression(vec![g.clone()]), v.clone()),
+                        ]))
+                    }
                     (true, false, _) => todo!(),     // [fg]_x = C [f] g
                     (false, true, true) => todo!(),  // [fx]_x = f
                     (false, true, false) => todo!(), // [fg]_x = B f [g]
