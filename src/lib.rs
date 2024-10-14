@@ -8,6 +8,7 @@ pub trait AbstractionElimination {
     fn contains(&self, variable: &Element) -> bool;
     fn contains_abstraction(&self) -> bool;
     fn abstraction_substitution(&mut self) -> &mut Self;
+    fn reduce_parens(&mut self) -> &mut Self;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
@@ -39,6 +40,16 @@ impl Combinator {
         )]);
         Some(())
     }
+
+    pub fn abstraction_elimination(&mut self) -> &mut Self {
+        self.add_abstraction();
+        while self.contains_abstraction() {
+            self.abstraction_substitution();
+            self.reduce_parens();
+        }
+
+        self
+    }
 }
 
 impl AbstractionElimination for Combinator {
@@ -52,6 +63,11 @@ impl AbstractionElimination for Combinator {
 
     fn abstraction_substitution(&mut self) -> &mut Self {
         self.expression.abstraction_substitution();
+        self
+    }
+
+    fn reduce_parens(&mut self) -> &mut Self {
+        self.expression.reduce_parens();
         self
     }
 }
@@ -79,7 +95,42 @@ impl AbstractionElimination for Expression {
     }
 
     fn abstraction_substitution(&mut self) -> &mut Self {
-        let _ = self.0.iter_mut().map(|e| e.abstraction_substitution());
+        self.0.iter_mut().for_each(|e| {
+            e.abstraction_substitution();
+        });
+        self
+    }
+
+    fn reduce_parens(&mut self) -> &mut Self {
+        // Remove parens around the first element if it is a subexpression
+        match self.0.get(0).unwrap() {
+            Element::Item(_) => {}
+            Element::SubExpression(s) => {
+                self.0.splice(0..1, s.0.clone());
+            }
+            Element::Abstraction(_, _) => {}
+        };
+
+        // Remove parens around subexpressions with a single element
+        self.0.iter_mut().for_each(|e| match e {
+            Element::SubExpression(s) => {
+                if s.0.len() == 1 {
+                    *e = s.0.get(0).unwrap().clone();
+                };
+            }
+            _ => {}
+        });
+
+        // Recursively reduce any subexpressions
+        self.0.iter_mut().for_each(|e| match e {
+            Element::SubExpression(s) => {
+                s.reduce_parens();
+            }
+            Element::Abstraction(s, _) => {
+                s.reduce_parens();
+            }
+            Element::Item(_) => {}
+        });
         self
     }
 }
@@ -121,17 +172,22 @@ impl AbstractionElimination for Element {
     }
 
     fn abstraction_substitution(&mut self) -> &mut Self {
-        match self {
-            Self::Item(_) => self,
+        *self = match self {
+            Self::Item(_) => self.clone(),
             Self::SubExpression(s) => {
                 s.abstraction_substitution();
-                self
+                self.clone()
             }
             Self::Abstraction(s, v) => match s.0.as_slice() {
                 [f] => match f {
                     Self::Item(i) => match i == v {
-                        true => todo!(),  // [x]_x = I
-                        false => todo!(), // [f]_x = K f
+                        // [x]_x = I
+                        true => Self::Item("I".to_string()),
+                        // [f]_x = K f
+                        false => Self::SubExpression(Expression(vec![
+                            Element::Item("K".to_string()),
+                            f.clone(),
+                        ])),
                     },
                     _ => panic!(),
                 },
@@ -148,7 +204,18 @@ impl AbstractionElimination for Element {
                 },
                 _ => panic!(),
             },
-        }
+        };
+
+        self
+    }
+
+    fn reduce_parens(&mut self) -> &mut Self {
+        *self = match self {
+            Self::Item(_) => self.clone(),
+            Self::SubExpression(s) => Self::SubExpression(s.reduce_parens().clone()),
+            Self::Abstraction(s, v) => Self::Abstraction(s.reduce_parens().clone(), v.clone()),
+        };
+        self
     }
 }
 
