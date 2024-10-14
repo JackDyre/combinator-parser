@@ -44,7 +44,6 @@ impl Combinator {
     pub fn abstraction_elimination(&mut self) -> &mut Self {
         self.add_abstraction();
         while self.contains_abstraction() {
-            println!("{self}");
             self.abstraction_substitution();
             self.reduce_parens();
         }
@@ -205,8 +204,18 @@ impl AbstractionElimination for Element {
                             Self::Abstraction(Expression(vec![g.clone()]), v.clone()),
                         ]))
                     }
-                    (true, false, _) => todo!(),    // [fg]_x = C [f] g
-                    (false, true, true) => todo!(), // [fx]_x = f
+                    (true, false, _) => {
+                        // [fg]_x = C [f] g
+                        Self::SubExpression(Expression(vec![
+                            Self::Item("C".to_string()),
+                            Self::Abstraction(Expression(f.to_vec()), v.clone()),
+                            g.clone(),
+                        ]))
+                    }
+                    (false, true, true) => {
+                        // [fx]_x = f
+                        Self::SubExpression(Expression(f.to_vec()))
+                    }
                     (false, true, false) => {
                         // [fg]_x = B f [g]
                         Self::SubExpression(Expression(vec![
@@ -215,7 +224,14 @@ impl AbstractionElimination for Element {
                             Self::Abstraction(Expression(vec![g.clone()]), v.clone()),
                         ]))
                     }
-                    (false, false, _) => todo!(), // [f]_x = K f
+                    (false, false, _) => {
+                        // [f]_x = K f
+                        Self::SubExpression(Expression(vec![
+                            Self::Item("K".to_string()),
+                            Self::SubExpression(Expression(f.to_vec())),
+                            g.clone(),
+                        ]))
+                    }
                 },
                 _ => panic!(),
             },
