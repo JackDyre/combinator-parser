@@ -9,6 +9,7 @@ pub trait AbstractionElimination {
     fn contains_abstraction(&self) -> bool;
     fn abstraction_substitution(&mut self) -> &mut Self;
     fn reduce_parens(&mut self) -> &mut Self;
+    fn reduce_expression(&mut self) -> &mut Self;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
@@ -23,11 +24,14 @@ impl Combinator {
         let (rest, (name, args)) = declaration(s).unwrap(); // TODO: Propagate
         let (_, exp) = all_consuming(expression)(rest).unwrap();
 
-        Ok(Self {
+        let mut c = Self {
             name: name.to_string(),
             args: args.into_iter().map(|a| a.to_string()).collect(),
             expression: Expression(exp),
-        })
+        };
+        c.reduce_parens();
+
+        Ok(c)
     }
 
     pub fn add_abstraction(&mut self) -> Option<()> {
@@ -44,15 +48,22 @@ impl Combinator {
     pub fn abstraction_elimination(&mut self) -> &mut Self {
         for _ in 0..self.args.len() {
             self.add_abstraction();
-            println!("{self}");
             while self.contains_abstraction() {
                 self.abstraction_substitution();
                 self.reduce_parens();
-                println!("{self}");
             }
         }
 
         self
+    }
+
+    pub fn apply(&self, name: &str, mut args: Expression) -> Self {
+        assert_eq!(self.args.len(), 0);
+        let mut c = self.clone();
+        c.name = name.to_string();
+        c.expression.0.append(&mut args.0);
+        c.reduce_expression();
+        c
     }
 }
 
@@ -74,6 +85,11 @@ impl AbstractionElimination for Combinator {
         self.expression.reduce_parens();
         self
     }
+
+    fn reduce_expression(&mut self) -> &mut Self {
+        self.expression.reduce_expression();
+        self
+    }
 }
 
 impl std::fmt::Display for Combinator {
@@ -88,6 +104,20 @@ impl std::fmt::Display for Combinator {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub struct Expression(Vec<Element>);
+
+impl Expression {
+    pub fn parse(s: &str) -> Result<Self> {
+        let (_, elements) = all_consuming(expression)(s).unwrap();
+        Ok(Self(elements))
+    }
+
+    pub fn apply(&self, mut args: Expression) -> Self {
+        let mut c = self.clone();
+        c.0.append(&mut args.0);
+        c.reduce_expression();
+        c
+    }
+}
 
 impl AbstractionElimination for Expression {
     fn contains(&self, variable: &Element) -> bool {
@@ -107,7 +137,7 @@ impl AbstractionElimination for Expression {
 
     fn reduce_parens(&mut self) -> &mut Self {
         // Remove parens around the first element if it is a subexpression
-        match self.0.get(0).unwrap() {
+        match self.0.first().unwrap() {
             Element::Item(_) => {}
             Element::SubExpression(s) => {
                 self.0.splice(0..1, s.0.clone());
@@ -137,6 +167,73 @@ impl AbstractionElimination for Expression {
         });
         self
     }
+
+    fn reduce_expression(&mut self) -> &mut Self {
+        loop {
+            self.0.iter_mut().for_each(|e| {
+                e.reduce_expression();
+            });
+            let mut made_substitution = false;
+
+            if self.0.len() > 0 {
+                match &self.0[0] {
+                    Element::Item(i) if i == "S" && self.0.len() >= 4 => {
+                        let x = self.0.remove(1);
+                        let y = self.0.remove(1);
+                        let z = self.0.remove(1);
+                        self.0.remove(0); // Remove S
+                        let yz_subexpr = Element::SubExpression(Expression(vec![y, z.clone()]));
+                        self.0.insert(0, x);
+                        self.0.insert(1, z);
+                        self.0.insert(2, yz_subexpr);
+                        made_substitution = true;
+                    }
+                    Element::Item(i) if i == "K" && self.0.len() >= 3 => {
+                        let x = self.0.remove(1);
+                        self.0.remove(1);
+                        self.0.remove(0);
+                        self.0.insert(0, x);
+                        made_substitution = true;
+                    }
+                    Element::Item(i) if i == "I" && self.0.len() >= 2 => {
+                        let next_elem = self.0.remove(1);
+                        self.0.remove(0);
+                        self.0.insert(0, next_elem);
+                        made_substitution = true;
+                    }
+                    Element::Item(i) if i == "B" && self.0.len() >= 4 => {
+                        let f = self.0.remove(1);
+                        let g = self.0.remove(1);
+                        let x = self.0.remove(1);
+                        self.0.remove(0);
+                        let gx_subexpr = Element::SubExpression(Expression(vec![g, x]));
+                        self.0.insert(0, f);
+                        self.0.insert(1, gx_subexpr);
+                        made_substitution = true;
+                    }
+                    Element::Item(i) if i == "C" && self.0.len() >= 4 => {
+                        let f = self.0.remove(1);
+                        let x = self.0.remove(1);
+                        let y = self.0.remove(1);
+                        self.0.remove(0);
+                        self.0.insert(0, f);
+                        self.0.insert(1, y);
+                        self.0.insert(2, x);
+                        made_substitution = true;
+                    }
+                    _ => {}
+                }
+            }
+
+            if made_substitution {
+                self.reduce_parens();
+            } else {
+                break;
+            }
+        }
+        self.reduce_parens();
+        self
+    }
 }
 
 impl std::fmt::Display for Expression {
@@ -150,6 +247,28 @@ impl std::fmt::Display for Expression {
         Ok(())
     }
 }
+
+impl From<Vec<Element>> for Expression {
+    fn from(value: Vec<Element>) -> Self {
+        Self(value)
+    }
+}
+
+impl From<Expression> for Vec<Element> {
+    fn from(value: Expression) -> Self {
+        value.0
+    }
+}
+
+// impl From<Vec<&str>> for Expression {
+//     fn from(value: Vec<&str>) -> Self {
+//         value
+//             .into_iter()
+//             .map(|s| s.into())
+//             .collect::<Vec<Element>>()
+//             .into()
+//     }
+// }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
 pub enum Element {
@@ -232,8 +351,10 @@ impl AbstractionElimination for Element {
                         // [f]_x = K f
                         Self::SubExpression(Expression(vec![
                             Self::Item("K".to_string()),
-                            Self::SubExpression(Expression(f.to_vec())),
-                            g.clone(),
+                            Self::SubExpression(Expression(vec![
+                                Self::SubExpression(Expression(f.to_vec())),
+                                g.clone(),
+                            ])),
                         ]))
                     }
                 },
@@ -252,6 +373,17 @@ impl AbstractionElimination for Element {
         };
         self
     }
+
+    fn reduce_expression(&mut self) -> &mut Self {
+        match self {
+            Self::Item(_) => (),
+            Self::SubExpression(s) => {
+                s.reduce_expression();
+            }
+            Self::Abstraction(_, _) => panic!(),
+        };
+        self
+    }
 }
 
 impl std::fmt::Display for Element {
@@ -261,5 +393,35 @@ impl std::fmt::Display for Element {
             Self::SubExpression(s) => write!(f, "({s})"),
             Self::Abstraction(s, v) => write!(f, "[{s}]_{v}"),
         }
+    }
+}
+
+impl From<Vec<Element>> for Element {
+    fn from(value: Vec<Element>) -> Self {
+        Self::SubExpression(value.into())
+    }
+}
+
+impl From<&str> for Element {
+    fn from(value: &str) -> Self {
+        Self::Item(value.to_string())
+    }
+}
+
+impl From<Vec<&str>> for Element {
+    fn from(value: Vec<&str>) -> Self {
+        Self::SubExpression(
+            value
+                .into_iter()
+                .map(|s| s.into())
+                .collect::<Vec<Element>>()
+                .into(),
+        )
+    }
+}
+
+impl From<Expression> for Element {
+    fn from(value: Expression) -> Self {
+        Self::SubExpression(value)
     }
 }
