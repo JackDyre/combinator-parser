@@ -3,6 +3,51 @@ mod parse;
 use anyhow::Result;
 use nom::combinator::all_consuming;
 use parse::{declaration, expression};
+use std::collections::HashSet;
+
+pub struct CombinatorContext(HashSet<Combinator>);
+
+impl CombinatorContext {
+    pub fn new() -> Self {
+        Self(HashSet::new())
+    }
+
+    fn validate(c: &Expression, allowed_symbols: &Vec<String>) -> bool {
+        c.0.iter().all(|e| match e {
+            Element::Item(i) => allowed_symbols.contains(i),
+            Element::SubExpression(s) => CombinatorContext::validate(s, allowed_symbols),
+            Element::Abstraction(..) => false,
+        })
+    }
+
+    fn register(&mut self, c: Combinator, allowed_symbols: &Vec<String>) -> Result<Combinator> {
+        if !Self::validate(&c.expression, allowed_symbols) {
+            anyhow::bail!("Unable to register");
+        }
+        self.0.insert(c.clone());
+
+        Ok(c)
+    }
+
+    pub fn register_strict(&mut self, c: Combinator) -> Result<Combinator> {
+        Self::register(
+            self,
+            c,
+            &vec!["S", "K", "I"].iter().map(|s| s.to_string()).collect(),
+        )
+    }
+
+    pub fn register_loose(&mut self, c: Combinator) -> Result<Combinator> {
+        Self::register(
+            self,
+            c,
+            &vec!["S", "K", "I", "B", "C"]
+                .iter()
+                .map(|s| s.to_string())
+                .collect(),
+        )
+    }
+}
 
 pub trait AbstractionElimination {
     fn contains(&self, variable: &Element) -> bool;
@@ -10,9 +55,10 @@ pub trait AbstractionElimination {
     fn abstraction_substitution(&mut self) -> &mut Self;
     fn reduce_parens(&mut self) -> &mut Self;
     fn reduce_expression(&mut self) -> &mut Self;
+    fn context_substitution(&mut self, context: &CombinatorContext) -> &mut Self;
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
 pub struct Combinator {
     pub name: String,
     pub args: Vec<String>,
@@ -90,6 +136,11 @@ impl AbstractionElimination for Combinator {
         self.expression.reduce_expression();
         self
     }
+
+    fn context_substitution(&mut self, context: &CombinatorContext) -> &mut Self {
+        self.expression.context_substitution(context);
+        self
+    }
 }
 
 impl std::fmt::Display for Combinator {
@@ -102,7 +153,7 @@ impl std::fmt::Display for Combinator {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
 pub struct Expression(Vec<Element>);
 
 impl Expression {
@@ -234,6 +285,24 @@ impl AbstractionElimination for Expression {
         self.reduce_parens();
         self
     }
+
+    fn context_substitution(&mut self, context: &CombinatorContext) -> &mut Self {
+        context.0.iter().for_each(|d| {
+            for element in self.0.iter_mut() {
+                match element {
+                    Element::Item(i) if *i == d.name => {
+                        *element = Element::SubExpression(d.expression.clone());
+                    }
+                    Element::Item(..) => (),
+                    Element::SubExpression(s) => {
+                        s.context_substitution(context);
+                    }
+                    Element::Abstraction(..) => panic!(),
+                };
+            }
+        });
+        self
+    }
 }
 
 impl std::fmt::Display for Expression {
@@ -270,7 +339,7 @@ impl From<Expression> for Vec<Element> {
 //     }
 // }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Hash)]
 pub enum Element {
     Item(String),
     SubExpression(Expression),
@@ -382,6 +451,20 @@ impl AbstractionElimination for Element {
             }
             Self::Abstraction(_, _) => panic!(),
         };
+        self
+    }
+
+    fn context_substitution(&mut self, context: &CombinatorContext) -> &mut Self {
+        context.0.iter().for_each(|d| match self {
+            Self::Item(i) if *i == d.name => {
+                *self = Self::SubExpression(d.expression.clone());
+            }
+            Self::Item(..) => (),
+            Self::SubExpression(s) => {
+                s.context_substitution(context);
+            }
+            Self::Abstraction(..) => panic!(),
+        });
         self
     }
 }
