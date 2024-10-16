@@ -166,7 +166,7 @@ impl Expression {
     pub fn apply(&self, mut args: Expression) -> Self {
         let mut c = self.clone();
         c.0.append(&mut args.0);
-        c.reduce_expression();
+        // c.reduce_expression();
         c
     }
 }
@@ -223,9 +223,7 @@ impl AbstractionElimination for Expression {
     fn reduce_expression(&mut self) -> &mut Self {
         loop {
             self.reduce_parens();
-
             let mut made_substitution = false;
-
             if self.0.len() > 0 {
                 match &self.0[0] {
                     Element::Item(i) if i == "S" && self.0.len() >= 4 => {
@@ -290,20 +288,25 @@ impl AbstractionElimination for Expression {
     }
 
     fn context_substitution(&mut self, context: &CombinatorContext) -> &mut Self {
-        context.0.iter().for_each(|d| {
-            for element in self.0.iter_mut() {
+        for element in self.0.iter_mut() {
+            for d in context.0.iter() {
                 match element {
                     Element::Item(i) if *i == d.name => {
                         *element = Element::SubExpression(d.expression.clone());
                     }
                     Element::Item(..) => (),
-                    Element::SubExpression(s) => {
-                        s.context_substitution(context);
-                    }
+                    Element::SubExpression(..) => (),
                     Element::Abstraction(..) => panic!(),
                 };
             }
-        });
+
+            match element {
+                Element::SubExpression(s) => {
+                    s.context_substitution(context);
+                }
+                _ => (),
+            }
+        }
         self.reduce_parens();
         self
     }
