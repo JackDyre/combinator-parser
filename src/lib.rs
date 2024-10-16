@@ -5,6 +5,7 @@ use nom::combinator::all_consuming;
 use parse::{declaration, expression};
 use std::collections::HashSet;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CombinatorContext(HashSet<Combinator>);
 
 impl CombinatorContext {
@@ -221,6 +222,7 @@ impl AbstractionElimination for Expression {
 
     fn reduce_expression(&mut self) -> &mut Self {
         loop {
+            self.reduce_parens();
             self.0.iter_mut().for_each(|e| {
                 e.reduce_expression();
             });
@@ -301,6 +303,7 @@ impl AbstractionElimination for Expression {
                 };
             }
         });
+        self.reduce_parens();
         self
     }
 }

@@ -1,54 +1,38 @@
-use anyhow::{Context, Result};
-use combinator_parser::{AbstractionElimination, Combinator, CombinatorContext, Element};
-use std::env;
+use anyhow::Result;
+use combinator_parser::{AbstractionElimination, Combinator, CombinatorContext, Expression};
+
+fn prelude(context: &mut CombinatorContext) {
+    vec![
+        "{True}fg=f",
+        "{False}fg=g",
+        "{Not}b=b{False}{True}",
+        "{Pair}xyb=bxy",
+        "{First}p=p{True}",
+        "{Second}p=p{False}",
+        "{0}=I",
+        "{IsZero}={First}",
+        "1={Pair}{False}0",
+        "{Next}n={Pair}{False}n",
+        "{Prev}n={Second}n",
+    ]
+    .into_iter()
+    .for_each(|p| {
+        let mut c = Combinator::parse(p).unwrap();
+        c.abstraction_elimination().context_substitution(context);
+        let _ = context.register_loose(c);
+    });
+}
 
 fn main() -> Result<()> {
-    let args: Vec<String> = env::args().collect();
-    let k: u32 = args
-        .get(1)
-        .context("Please provide a number as a command-line argument")?
-        .parse()?;
-
     let mut context = CombinatorContext::new();
+    prelude(&mut context);
 
-    let mut succ = Combinator::parse("{Succ}nfx=f(nfx)")?;
-    let mut pred = Combinator::parse("{Pred}nfx=n(B(CI)(CIf))(Kx)I")?;
-    let mut num = Combinator::parse("0fx=x")?;
-    succ.abstraction_elimination();
-    pred.abstraction_elimination();
-    num.abstraction_elimination();
-
-    for n in 1..=k {
-        num = succ.apply(&n.to_string(), vec![num.expression.clone().into()].into());
-    }
-
-    let _ = context.register_loose(succ);
-    let _ = context.register_loose(pred);
-
-    let display_num = num.apply(
-        "InputNum",
-        vec!["f", "x"]
-            .iter()
-            .map(|s| Element::Item(s.to_string()))
-            .collect::<Vec<_>>()
-            .into(),
-    );
-    println!("{display_num}");
-
-    let mut ident = Combinator::parse("{Ident}nfx={Pred}({Succ}n)fx")?;
-    ident.abstraction_elimination();
-    ident.context_substitution(&context);
-    println!("{ident}");
-
-    let output = ident.apply("", vec![num.expression.into()].into()).apply(
-        "OutputNum",
-        vec!["f", "x"]
-            .iter()
-            .map(|s| Element::Item(s.to_string()))
-            .collect::<Vec<_>>()
-            .into(),
-    );
-    println!("{output}");
+    let mut c = Expression::parse("{IsZero}1{Yes}{No}")?;
+    println!("{c}");
+    c.context_substitution(&context);
+    println!("{c}");
+    c.reduce_expression();
+    println!("{c}");
 
     Ok(())
 }
