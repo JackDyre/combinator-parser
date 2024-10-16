@@ -223,9 +223,7 @@ impl AbstractionElimination for Expression {
     fn reduce_expression(&mut self) -> &mut Self {
         loop {
             self.reduce_parens();
-            self.0.iter_mut().for_each(|e| {
-                e.reduce_expression();
-            });
+
             let mut made_substitution = false;
 
             if self.0.len() > 0 {
@@ -284,6 +282,9 @@ impl AbstractionElimination for Expression {
                 break;
             }
         }
+        self.0.iter_mut().for_each(|e| {
+            e.reduce_expression();
+        });
         self.reduce_parens();
         self
     }

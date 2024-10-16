@@ -1,8 +1,10 @@
 use anyhow::Result;
-use combinator_parser::{AbstractionElimination, Combinator, CombinatorContext, Expression};
+use combinator_parser::{AbstractionElimination, Combinator, CombinatorContext};
 
 fn prelude(context: &mut CombinatorContext) {
     vec![
+        "M=SII",
+        "Y=BM(CBM)",
         "{True}fg=f",
         "{False}fg=g",
         "{Not}b=b{False}{True}",
@@ -27,12 +29,19 @@ fn main() -> Result<()> {
     let mut context = CombinatorContext::new();
     prelude(&mut context);
 
-    let mut c = Expression::parse("{IsZero}1{Yes}{No}")?;
-    println!("{c}");
-    c.context_substitution(&context);
-    println!("{c}");
-    c.reduce_expression();
-    println!("{c}");
+    let mut ap = Combinator::parse("{Ap}anfx={IsZero}nx(f(a({Prev}n)fx))")?;
+    ap.abstraction_elimination()
+        .context_substitution(&context)
+        .reduce_expression();
+    println! {"{ap}"}
+    context.register_loose(ap)?;
+
+    let mut apply = Combinator::parse("{Apply}=Y{Ap}")?;
+    apply
+        .abstraction_elimination()
+        .context_substitution(&context)
+        .reduce_expression();
+
 
     Ok(())
 }
